@@ -237,8 +237,11 @@ export function getOverview(params?: { provinceId?: number; districtId?: number;
       values.province = province;
     }
   }
-  if (params?.districtId) {
-    const district = districtLookup[params.districtId - 1]?.admin2;
+  // Filter districts by selected province first, then lookup by districtId
+  if (params?.districtId && params?.provinceId) {
+    const province = provinceLookup[params.provinceId - 1]?.admin1;
+    const districtsForProvince = districtLookup.filter((d) => d.admin1 === province);
+    const district = districtsForProvince[params.districtId - 1]?.admin2;
     if (district) {
       conditions.push("admin2 = @district");
       values.district = district;
