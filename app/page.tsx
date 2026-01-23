@@ -71,7 +71,7 @@ export default function Home() {
   // ---------------------------------------------------------------------------
   const [provinceId, setProvinceId] = useState<number | undefined>();
   const [districtId, setDistrictId] = useState<number | undefined>();
-  const [itemId, setItemId] = useState<number | undefined>();
+  const [itemName, setItemName] = useState<string | undefined>(); // Use item name for consistent filtering
 
   // ---------------------------------------------------------------------------
   // STATE: UI loading indicator
@@ -107,8 +107,8 @@ export default function Home() {
       setItems(data.items); // Update items based on selected location
       
       // Reset item selection if current item is not available in new location
-      if (itemId && !data.items.some((i: Item) => i.id === itemId)) {
-        setItemId(undefined);
+      if (itemName && !data.items.some((i: Item) => i.name === itemName)) {
+        setItemName(undefined);
       }
     }
     loadFilteredItems();
@@ -125,7 +125,7 @@ export default function Home() {
       const query = new URLSearchParams();
       if (provinceId) query.append("province", String(provinceId));
       if (districtId) query.append("district", String(districtId));
-      if (itemId) query.append("item", String(itemId));
+      if (itemName) query.append("item", itemName); // Use item name instead of ID
 
       // Fetch price data and overview stats in parallel
       const [pricesRes, overviewRes] = await Promise.all([
@@ -144,7 +144,7 @@ export default function Home() {
     }
 
     loadData();
-  }, [provinceId, districtId, itemId]); // Re-run when any filter changes
+  }, [provinceId, districtId, itemName]); // Re-run when any filter changes
 
   // ---------------------------------------------------------------------------
   // COMPUTED: Get districts for the currently selected province
@@ -224,7 +224,7 @@ export default function Home() {
               <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Cambodia Food Monitor</p>
               <h1 className="text-3xl font-semibold tracking-tight text-white">Food Price Dashboard</h1>
               <p className="text-sm text-slate-300">
-                Track daily retail prices across provinces, districts, and markets.
+                Track daily retail prices across provinces/cities, districts, and markets.
               </p>
             </div>
             <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-cyan-100 ring-1 ring-white/10">
@@ -243,7 +243,7 @@ export default function Home() {
                 setProvinceId(nextProvince);
                 setDistrictId(undefined);
               }}
-              options={[{ value: "", label: "All provinces" }, ...provinces.map((p) => ({ value: String(p.id), label: p.name }))]}
+              options={[{ value: "", label: "All provinces/Cities" }, ...provinces.map((p) => ({ value: String(p.id), label: p.name }))]}
             />
             {/* District filter - disabled until province is selected */}
             <FilterSelect
@@ -251,7 +251,7 @@ export default function Home() {
               value={districtId ? String(districtId) : ""}
               onChange={(value) => setDistrictId(value ? Number(value) : undefined)}
               options={[
-                { value: "", label: provinceId ? "All districts" : "Pick a province first" },
+                { value: "", label: provinceId ? "All districts" : "Pick a province or city first" },
                 ...filteredDistricts.map((d) => ({ value: String(d.id), label: d.name })),
               ]}
               disabled={!provinceId}
@@ -259,11 +259,11 @@ export default function Home() {
             {/* Food item filter - shows items available in selected location */}
             <FilterSelect
               label="Food item"
-              value={itemId ? String(itemId) : ""}
-              onChange={(value) => setItemId(value ? Number(value) : undefined)}
+              value={itemName || ""}
+              onChange={(value) => setItemName(value || undefined)}
               options={[
                 { value: "", label: provinceId ? `All items in ${provinces.find(p => p.id === provinceId)?.name || "location"}` : "All food items" },
-                ...items.map((i) => ({ value: String(i.id), label: `${i.name} (${i.unit})` }))
+                ...items.map((i) => ({ value: i.name, label: `${i.name} (${i.unit})` }))
               ]}
             />
           </div>
@@ -410,8 +410,8 @@ function FilterSelect({ label, value, onChange, options, disabled }: FilterSelec
         onChange={(e) => onChange(e.target.value)}
         className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/40 disabled:opacity-60"
       >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value} className="bg-slate-900 text-white">
+        {options.map((opt, index) => (
+          <option key={`${opt.value}-${index}`} value={opt.value} className="bg-slate-900 text-white">
             {opt.label}
           </option>
         ))}

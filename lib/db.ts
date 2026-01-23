@@ -133,7 +133,7 @@ export function getItemsByLocation(params: {
 export function getPriceRows(params: {
   provinceId?: number;  // Made optional to allow fetching all provinces
   districtId?: number;
-  itemId?: number;
+  itemName?: string;    // Use item name for consistent identification
   limit?: number;
 }): PriceRow[] {
   const conditions: string[] = [];
@@ -145,9 +145,6 @@ export function getPriceRows(params: {
   const districtLookup = db
     .prepare(`SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin2 IS NOT NULL ORDER BY admin1, admin2`)
     .all() as { admin1: string; admin2: string }[];
-  const itemLookup = db
-    .prepare(`SELECT DISTINCT commodity, unit, category FROM ${TABLE} WHERE commodity IS NOT NULL ORDER BY category, commodity`)
-    .all() as { commodity: string; unit: string; category: string }[];
 
   if (params.provinceId) {
     const province = provinceLookup[params.provinceId - 1]?.admin1;
@@ -168,12 +165,10 @@ export function getPriceRows(params: {
     }
   }
 
-  if (params.itemId) {
-    const item = itemLookup[params.itemId - 1];
-    if (item) {
-      conditions.push("commodity = @commodity");
-      values.commodity = item.commodity;
-    }
+  // Filter by item name directly (no lookup needed)
+  if (params.itemName) {
+    conditions.push("commodity = @commodity");
+    values.commodity = params.itemName;
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -225,7 +220,7 @@ export function getPriceRows(params: {
   }));
 }
 
-export function getOverview(params?: { provinceId?: number; districtId?: number; itemId?: number }): Overview {
+export function getOverview(params?: { provinceId?: number; districtId?: number; itemName?: string }): Overview {
   const conditions: string[] = [];
   const values: Record<string, unknown> = {};
   const provinceLookup = db
@@ -234,9 +229,6 @@ export function getOverview(params?: { provinceId?: number; districtId?: number;
   const districtLookup = db
     .prepare(`SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin2 IS NOT NULL ORDER BY admin1, admin2`)
     .all() as { admin1: string; admin2: string }[];
-  const itemLookup = db
-    .prepare(`SELECT DISTINCT commodity FROM ${TABLE} WHERE commodity IS NOT NULL ORDER BY commodity`)
-    .all() as { commodity: string }[];
 
   if (params?.provinceId) {
     const province = provinceLookup[params.provinceId - 1]?.admin1;
@@ -252,12 +244,10 @@ export function getOverview(params?: { provinceId?: number; districtId?: number;
       values.district = district;
     }
   }
-  if (params?.itemId) {
-    const commodity = itemLookup[params.itemId - 1]?.commodity;
-    if (commodity) {
-      conditions.push("commodity = @commodity");
-      values.commodity = commodity;
-    }
+  // Use item name directly instead of looking up by ID
+  if (params?.itemName) {
+    conditions.push("commodity = @commodity");
+    values.commodity = params.itemName;
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -286,19 +276,14 @@ export function getOverview(params?: { provinceId?: number; districtId?: number;
   };
 }
 
-export function getAveragesByProvince(itemId?: number) {
+export function getAveragesByProvince(itemName?: string) {
   const conditions: string[] = [];
   const values: Record<string, unknown> = {};
 
-  if (itemId) {
-    const itemLookup = db
-      .prepare(`SELECT DISTINCT commodity FROM ${TABLE} WHERE commodity IS NOT NULL ORDER BY commodity`)
-      .all() as { commodity: string }[];
-    const commodity = itemLookup[itemId - 1]?.commodity;
-    if (commodity) {
-      conditions.push("commodity = @commodity");
-      values.commodity = commodity;
-    }
+  // Use item name directly instead of looking up by ID
+  if (itemName) {
+    conditions.push("commodity = @commodity");
+    values.commodity = itemName;
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
