@@ -363,16 +363,6 @@ export default function Home() {
                 {!averages.length && <p className="text-sm text-slate-400">No data to display.</p>}
               </div>
             </div>
-
-            {/* Guidance panel with usage tips */}
-            <div className="rounded-2xl bg-gradient-to-br from-cyan-500/30 via-cyan-400/20 to-slate-900 p-4 ring-1 ring-white/10">
-              <h3 className="text-base font-semibold text-white">Guidance</h3>
-              <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-200">
-                <li>Use the filters to drill down by province, district, or item.</li>
-                <li>Data are seeded locally into SQLite at first run.</li>
-                <li>Extend the schema in lib/db.ts to plug in live feeds.</li>
-              </ul>
-            </div>
           </div>
         </section>
       </div>
