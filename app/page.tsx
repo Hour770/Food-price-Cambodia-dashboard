@@ -13,6 +13,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 
 // =============================================================================
 // TYPE DEFINITIONS
@@ -57,6 +59,11 @@ type Overview = {
 // =============================================================================
 
 export default function Home() {
+  // i18n hooks
+  const t = useTranslations();
+  const router = useRouter();
+  const pathname = usePathname();
+  const currentLocale = useLocale();
   // ---------------------------------------------------------------------------
   // STATE: Data from API
   // ---------------------------------------------------------------------------
@@ -219,16 +226,43 @@ export default function Home() {
             HEADER SECTION: Title, subtitle, and filter controls
         ------------------------------------------------------------------- */}
         <header className="flex flex-col gap-4">
+          {/* Language Switcher */}
+          <div className="flex justify-end">
+            <div className="inline-flex items-center rounded-full bg-white/5 p-1 ring-1 ring-white/10">
+              <button
+                className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
+                  currentLocale === 'en' 
+                    ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                onClick={() => {
+                  if (currentLocale !== 'en') router.push(`/en${pathname.replace(/^\/[a-z]{2}/, '')}`);
+                }}
+              >
+                EN
+              </button>
+              <button
+                className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
+                  currentLocale === 'km' 
+                    ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                onClick={() => {
+                  if (currentLocale !== 'km') router.push(`/km${pathname.replace(/^\/[a-z]{2}/, '')}`);
+                }}
+              >
+                ខ្មែរ
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">Cambodia Food Monitor</p>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">Food Price Dashboard</h1>
-              <p className="text-sm text-slate-300">
-                Track daily retail prices across provinces/cities, districts, and markets.
-              </p>
+              <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">{t('monitor')}</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">{t('dashboardTitle')}</h1>
+              <p className="text-sm text-slate-300">{t('dashboardSubtitle')}</p>
             </div>
             <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-cyan-100 ring-1 ring-white/10">
-              Updated "June 19, 2023"
+              {t('updated')} "June 19, 2023"
             </span>
           </div>
 
@@ -236,33 +270,33 @@ export default function Home() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {/* Province filter - resets district when changed */}
             <FilterSelect
-              label="Province"
+              label={t('province')}
               value={provinceId ? String(provinceId) : ""}
               onChange={(value) => {
                 const nextProvince = value ? Number(value) : undefined;
                 setProvinceId(nextProvince);
                 setDistrictId(undefined);
               }}
-              options={[{ value: "", label: "All provinces/Cities" }, ...provinces.map((p) => ({ value: String(p.id), label: p.name }))]}
+              options={[{ value: "", label: t('allProvinces') }, ...provinces.map((p) => ({ value: String(p.id), label: p.name }))]}
             />
             {/* District filter - disabled until province is selected */}
             <FilterSelect
-              label="District"
+              label={t('district')}
               value={districtId ? String(districtId) : ""}
               onChange={(value) => setDistrictId(value ? Number(value) : undefined)}
               options={[
-                { value: "", label: provinceId ? "All districts" : "Pick a province or city first" },
+                { value: "", label: provinceId ? t('allDistricts') : t('pickProvince') },
                 ...filteredDistricts.map((d) => ({ value: String(d.id), label: d.name })),
               ]}
               disabled={!provinceId}
             />
             {/* Food item filter - shows items available in selected location */}
             <FilterSelect
-              label="Food item"
+              label={t('foodItem')}
               value={itemName || ""}
               onChange={(value) => setItemName(value || undefined)}
               options={[
-                { value: "", label: provinceId ? `All items in ${provinces.find(p => p.id === provinceId)?.name || "location"}` : "All food items" },
+                { value: "", label: provinceId ? `${t('allItemsIn')} ${provinces.find(p => p.id === provinceId)?.name || t('location')}` : t('allFoodItems') },
                 ...items.map((i) => ({ value: i.name, label: `${i.name} (${i.unit})` }))
               ]}
             />
@@ -273,9 +307,9 @@ export default function Home() {
             KPI SECTION: Summary statistics cards
         ------------------------------------------------------------------- */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <KpiCard title="Average price" value={overview?.averagePrice ? `${numberFormat.format(Math.round(overview.averagePrice))} KHR` : "—"} detail="Simple mean across returned rows" />
-          <KpiCard title="Markets tracked" value={overview ? numberFormat.format(overview.totalMarkets) : "—"} detail="Unique retail markets" />
-          <KpiCard title="Food items" value={overview ? numberFormat.format(overview.totalItems) : "—"} detail="Distinct items with prices" />
+          <KpiCard title={t('averagePrice')} value={overview?.averagePrice ? `${numberFormat.format(Math.round(overview.averagePrice))} KHR` : "—"} detail={t('simpleMean')} />
+          <KpiCard title={t('marketsTracked')} value={overview ? numberFormat.format(overview.totalMarkets) : "—"} detail={t('uniqueMarkets')} />
+          <KpiCard title={t('foodItems')} value={overview ? numberFormat.format(overview.totalItems) : "—"} detail={t('distinctItems')} />
         </section>
 
         {/* -------------------------------------------------------------------
@@ -287,21 +321,21 @@ export default function Home() {
           <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 lg:col-span-2">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Latest price prints</h2>
-                <p className="text-sm text-slate-300">Unique items with price trend indicators.</p>
+                <h2 className="text-lg font-semibold text-white">{t('latestPricePrints')}</h2>
+                <p className="text-sm text-slate-300">{t('uniqueItems')}</p>
               </div>
-              {loading && <span className="text-xs text-cyan-100">Loading…</span>}
+              {loading && <span className="text-xs text-cyan-100">{t('loading')}</span>}
             </div>
             <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
               <table className="w-full text-sm text-slate-100">
                 <thead className="bg-white/5 text-left text-xs uppercase tracking-wide text-slate-300">
                   <tr>
-                    <th className="px-3 py-2">Item</th>
-                    <th className="px-3 py-2">Location</th>
-                    <th className="px-3 py-2">Market</th>
-                    <th className="px-3 py-2 text-right">Price</th>
-                    <th className="px-3 py-2 text-center">Trend</th>
-                    <th className="px-3 py-2 text-right">Date</th>
+                    <th className="px-3 py-2">{t('item')}</th>
+                    <th className="px-3 py-2">{t('location')}</th>
+                    <th className="px-3 py-2">{t('market')}</th>
+                    <th className="px-3 py-2 text-right">{t('price')}</th>
+                    <th className="px-3 py-2 text-center">{t('trend')}</th>
+                    <th className="px-3 py-2 text-right">{t('date')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,12 +355,12 @@ export default function Home() {
                         <div className="font-semibold text-cyan-100">{numberFormat.format(row.price)} {row.currency}</div>
                         {row.previousPrice && (
                           <div className="text-xs text-slate-400">
-                            was {numberFormat.format(row.previousPrice)} {row.currency}
+                            {t('was')} {numberFormat.format(row.previousPrice)} {row.currency}
                           </div>
                         )}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <PriceTrendBadge trend={row.trend} />
+                        <PriceTrendBadge trend={row.trend} labels={{ up: t('up'), down: t('down'), same: t('same') }} />
                       </td>
                       <td className="px-3 py-2 text-right text-slate-300">{row.date}</td>
                     </tr>
@@ -335,7 +369,7 @@ export default function Home() {
                   {!deduplicatedPrices.length && !loading && (
                     <tr>
                       <td colSpan={6} className="px-3 py-8 text-center text-slate-300">
-                        No data for the current filters.
+                        {t('noData')}
                       </td>
                     </tr>
                   )}
@@ -348,8 +382,8 @@ export default function Home() {
           <div className="flex flex-col gap-4">
             {/* Average price by province - horizontal bar chart */}
             <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <h3 className="text-base font-semibold text-white">Average by province</h3>
-              <p className="text-xs text-slate-300">Mean price across markets</p>
+              <h3 className="text-base font-semibold text-white">{t('averageByProvince')}</h3>
+              <p className="text-xs text-slate-300">{t('meanPrice')}</p>
               <div className="mt-3 flex flex-col gap-2">
                 {averages.map((item) => (
                   <BarRow
@@ -360,7 +394,7 @@ export default function Home() {
                     formatter={(v) => `${numberFormat.format(Math.round(v))} KHR`}
                   />
                 ))}
-                {!averages.length && <p className="text-sm text-slate-400">No data to display.</p>}
+                {!averages.length && <p className="text-sm text-slate-400">{t('noDataDisplay')}</p>}
               </div>
             </div>
           </div>
@@ -461,12 +495,14 @@ function BarRow({ label, value, max, formatter }: BarRowProps) {
 /**
  * PriceTrendBadge - Badge showing price trend with arrow icon and color
  * @param trend - "up" (price increased), "down" (price decreased), "same" (no change), or null (no previous data)
+ * @param labels - Translated labels for up, down, same
  */
 type PriceTrendBadgeProps = {
   trend: "up" | "down" | "same" | null;
+  labels: { up: string; down: string; same: string };
 };
 
-function PriceTrendBadge({ trend }: PriceTrendBadgeProps) {
+function PriceTrendBadge({ trend, labels }: PriceTrendBadgeProps) {
   if (!trend) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/20 px-2 py-0.5 text-xs text-slate-400">
@@ -478,17 +514,17 @@ function PriceTrendBadge({ trend }: PriceTrendBadgeProps) {
   const config = {
     up: {
       icon: "↑",
-      label: "Up",
+      label: labels.up,
       className: "bg-red-500/20 text-red-400",
     },
     down: {
       icon: "↓",
-      label: "Down",
+      label: labels.down,
       className: "bg-green-500/20 text-green-400",
     },
     same: {
       icon: "→",
-      label: "Same",
+      label: labels.same,
       className: "bg-slate-500/20 text-slate-400",
     },
   };
