@@ -11,13 +11,14 @@
   "dependencies": {
     "better-sqlite3": "^9.6.0",
     "next": "16.1.4",
+    "next-intl": "^4.7.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
     "@types/better-sqlite3": "^7.6.10",
+    "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
