@@ -27,29 +27,56 @@ export type Filters = {
   items: { id: number; name: string; unit: string; category: string }[];
 };
 
-const externalDbPath = path.join(process.cwd(), "database", "food_price_kh.sqlite");
-const fallbackDbPath = path.join(process.cwd(), "data", "food_prices.db");
-const dbPath = existsSync(externalDbPath) ? externalDbPath : fallbackDbPath;
+// Database paths for each locale
+const dbPaths = {
+  en: path.join(process.cwd(), "database", "food_price_en.sqlite"),
+  km: path.join(process.cwd(), "database", "food_price_kh.sqlite"),
+};
 
-const db = new Database(dbPath);
+// Cache for database instances
+const dbCache: Record<string, Database.Database> = {};
 
-const candidateTables = ["food_price_kh", "food_price_san"];
+// Get database instance for a specific locale
+function getDb(locale: string = 'en'): Database.Database {
+  const validLocale = locale === 'km' ? 'km' : 'en';
+  
+  if (!dbCache[validLocale]) {
+    const dbPath = dbPaths[validLocale];
+    if (!existsSync(dbPath)) {
+      throw new Error(`Database file not found: ${dbPath}`);
+    }
+    dbCache[validLocale] = new Database(dbPath);
+  }
+  
+  return dbCache[validLocale];
+}
 
-function resolveTableName() {
+// Get table name for a specific database
+function getTableName(db: Database.Database, locale: string): string {
+  const candidateTables = locale === 'km' 
+    ? ["food_price_kh", "food_price_san"]
+    : ["food_price_en", "food_prices"];
+    
   for (const name of candidateTables) {
     const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(name) as
       | { name: string }
       | undefined;
     if (row) return row.name;
   }
-  throw new Error(
-    `Expected one of the tables (${candidateTables.join(", ")}) in ${dbPath}, but none were found. Place your SQLite file with that table in the database folder.`,
-  );
+  
+  // Fallback: get first available table
+  const anyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1").get() as
+    | { name: string }
+    | undefined;
+  if (anyTable) return anyTable.name;
+  
+  throw new Error(`No valid table found in database for locale: ${locale}`);
 }
 
-const TABLE = resolveTableName();
-
-export function getFilters(): Filters {
+export function getFilters(locale: string = 'en'): Filters {
+  const db = getDb(locale);
+  const TABLE = getTableName(db, locale);
+  
   const provinces = db
     .prepare(`SELECT DISTINCT admin1 AS name FROM ${TABLE} WHERE admin1 IS NOT NULL ORDER BY admin1`)
     .all() as { name: string }[];
@@ -84,7 +111,11 @@ export function getFilters(): Filters {
 export function getItemsByLocation(params: {
   provinceId?: number;
   districtId?: number;
+  locale?: string;
 }): { id: number; name: string; unit: string; category: string }[] {
+  const db = getDb(params.locale);
+  const TABLE = getTableName(db, params.locale || 'en');
+  
   const conditions: string[] = ["commodity IS NOT NULL"];
   const values: Record<string, unknown> = {};
 
@@ -135,7 +166,11 @@ export function getPriceRows(params: {
   districtId?: number;
   itemName?: string;    // Use item name for consistent identification
   limit?: number;
+  locale?: string;
 }): PriceRow[] {
+  const db = getDb(params.locale);
+  const TABLE = getTableName(db, params.locale || 'en');
+  
   const conditions: string[] = [];
   const values: Record<string, unknown> = {};
 
@@ -220,7 +255,10 @@ export function getPriceRows(params: {
   }));
 }
 
-export function getOverview(params?: { provinceId?: number; districtId?: number; itemName?: string }): Overview {
+export function getOverview(params?: { provinceId?: number; districtId?: number; itemName?: string; locale?: string }): Overview {
+  const db = getDb(params?.locale);
+  const TABLE = getTableName(db, params?.locale || 'en');
+  
   const conditions: string[] = [];
   const values: Record<string, unknown> = {};
   const provinceLookup = db
@@ -279,7 +317,10 @@ export function getOverview(params?: { provinceId?: number; districtId?: number;
   };
 }
 
-export function getAveragesByProvince(itemName?: string) {
+export function getAveragesByProvince(itemName?: string, locale?: string) {
+  const db = getDb(locale);
+  const TABLE = getTableName(db, locale || 'en');
+  
   const conditions: string[] = [];
   const values: Record<string, unknown> = {};
 
