@@ -86,17 +86,21 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   // ---------------------------------------------------------------------------
-  // EFFECT: Load filter options (provinces & items) on initial mount
+  // EFFECT: Load filter options (provinces & items) on initial mount or locale change
   // ---------------------------------------------------------------------------
   useEffect(() => {
     async function loadFilters() {
-      const res = await fetch("/api/filters", { cache: "no-store" });
+      const res = await fetch(`/api/filters?locale=${currentLocale}`, { cache: "no-store" });
       const data = await res.json();
       setProvinces(data.provinces); // Populate province dropdown
       setItems(data.items);         // Populate food item dropdown (all items initially)
+      // Reset selections when locale changes
+      setProvinceId(undefined);
+      setDistrictId(undefined);
+      setItemName(undefined);
     }
     loadFilters();
-  }, []);
+  }, [currentLocale]); // Re-run when locale changes
 
   // ---------------------------------------------------------------------------
   // EFFECT: Reload food items when province or district changes
@@ -106,6 +110,7 @@ export default function Home() {
     async function loadFilteredItems() {
       // Build query string for location filter
       const query = new URLSearchParams();
+      query.append("locale", currentLocale);
       if (provinceId) query.append("province", String(provinceId));
       if (districtId) query.append("district", String(districtId));
 
@@ -119,7 +124,7 @@ export default function Home() {
       }
     }
     loadFilteredItems();
-  }, [provinceId, districtId]); // Re-run when location changes
+  }, [provinceId, districtId, currentLocale]); // Re-run when location or locale changes
 
   // ---------------------------------------------------------------------------
   // EFFECT: Reload price data and overview stats when filters change
@@ -130,9 +135,10 @@ export default function Home() {
       
       // Build query string from active filters
       const query = new URLSearchParams();
+      query.append("locale", currentLocale);
       if (provinceId) query.append("province", String(provinceId));
       if (districtId) query.append("district", String(districtId));
-      if (itemName) query.append("item", itemName); // Use item name instead of ID
+      if (itemName) query.append("item", itemName);
 
       // Fetch price data and overview stats in parallel
       const [pricesRes, overviewRes] = await Promise.all([
@@ -151,7 +157,7 @@ export default function Home() {
     }
 
     loadData();
-  }, [provinceId, districtId, itemName]); // Re-run when any filter changes
+  }, [provinceId, districtId, itemName, currentLocale]); // Re-run when any filter or locale changes
 
   // ---------------------------------------------------------------------------
   // COMPUTED: Get districts for the currently selected province
@@ -219,7 +225,7 @@ export default function Home() {
   // RENDER: Main dashboard layout
   // ===========================================================================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
         
         {/* -------------------------------------------------------------------
@@ -228,12 +234,12 @@ export default function Home() {
         <header className="flex flex-col gap-4">
           {/* Language Switcher */}
           <div className="flex justify-end">
-            <div className="inline-flex items-center rounded-full bg-white/5 p-1 ring-1 ring-white/10">
+            <div className="inline-flex items-center rounded-full bg-slate-100 p-1 ring-1 ring-slate-200">
               <button
                 className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
                   currentLocale === 'en' 
                     ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                    : 'text-slate-400 hover:text-white'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
                 onClick={() => {
                   if (currentLocale !== 'en') router.push(`/en${pathname.replace(/^\/[a-z]{2}/, '')}`);
@@ -245,7 +251,7 @@ export default function Home() {
                 className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 ${
                   currentLocale === 'km' 
                     ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' 
-                    : 'text-slate-400 hover:text-white'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
                 onClick={() => {
                   if (currentLocale !== 'km') router.push(`/km${pathname.replace(/^\/[a-z]{2}/, '')}`);
@@ -257,11 +263,11 @@ export default function Home() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-cyan-200">{t('monitor')}</p>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">{t('dashboardTitle')}</h1>
-              <p className="text-sm text-slate-300">{t('dashboardSubtitle')}</p>
+              <p className="text-sm uppercase tracking-[0.2em] text-cyan-600">{t('monitor')}</p>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{t('dashboardTitle')}</h1>
+              <p className="text-sm text-slate-600">{t('dashboardSubtitle')}</p>
             </div>
-            <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-cyan-100 ring-1 ring-white/10">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-cyan-700 ring-1 ring-slate-200">
               {t('updated')} "June 19, 2023"
             </span>
           </div>
@@ -318,17 +324,17 @@ export default function Home() {
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           
           {/* Price data table - spans 2 columns on large screens */}
-          <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 lg:col-span-2">
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm lg:col-span-2">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">{t('latestPricePrints')}</h2>
-                <p className="text-sm text-slate-300">{t('uniqueItems')}</p>
+                <h2 className="text-lg font-semibold text-slate-900">{t('latestPricePrints')}</h2>
+                <p className="text-sm text-slate-600">{t('uniqueItems')}</p>
               </div>
-              {loading && <span className="text-xs text-cyan-100">{t('loading')}</span>}
+              {loading && <span className="text-xs text-cyan-600">{t('loading')}</span>}
             </div>
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-              <table className="w-full text-sm text-slate-100">
-                <thead className="bg-white/5 text-left text-xs uppercase tracking-wide text-slate-300">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <table className="w-full text-sm text-slate-800">
+                <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
                   <tr>
                     <th className="px-3 py-2">{t('item')}</th>
                     <th className="px-3 py-2">{t('location')}</th>
@@ -341,20 +347,20 @@ export default function Home() {
                 <tbody>
                   {/* Display deduplicated price records with trend indicators */}
                   {deduplicatedPrices.slice(0, 25).map((row) => (
-                    <tr key={row.id} className="border-t border-white/5 hover:bg-white/5">
+                    <tr key={row.id} className="border-t border-slate-200 hover:bg-slate-100">
                       <td className="px-3 py-2">
-                        <div className="font-semibold text-white">{row.item}</div>
-                        <div className="text-xs text-slate-400">{row.category} · {row.unit}</div>
+                        <div className="font-semibold text-slate-900">{row.item}</div>
+                        <div className="text-xs text-slate-500">{row.category} · {row.unit}</div>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="text-sm text-white">{row.province}</div>
-                        <div className="text-xs text-slate-400">{row.district}</div>
+                        <div className="text-sm text-slate-900">{row.province}</div>
+                        <div className="text-xs text-slate-500">{row.district}</div>
                       </td>
-                      <td className="px-3 py-2 text-slate-200">{row.market}</td>
+                      <td className="px-3 py-2 text-slate-700">{row.market}</td>
                       <td className="px-3 py-2 text-right">
-                        <div className="font-semibold text-cyan-100">{numberFormat.format(row.price)} {row.currency}</div>
+                        <div className="font-semibold text-cyan-600">{numberFormat.format(row.price)} {row.currency}</div>
                         {row.previousPrice && (
-                          <div className="text-xs text-slate-400">
+                          <div className="text-xs text-slate-500">
                             {t('was')} {numberFormat.format(row.previousPrice)} {row.currency}
                           </div>
                         )}
@@ -362,13 +368,13 @@ export default function Home() {
                       <td className="px-3 py-2 text-center">
                         <PriceTrendBadge trend={row.trend} labels={{ up: t('up'), down: t('down'), same: t('same') }} />
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-300">{row.date}</td>
+                      <td className="px-3 py-2 text-right text-slate-600">{row.date}</td>
                     </tr>
                   ))}
                   {/* Empty state when no data matches filters */}
                   {!deduplicatedPrices.length && !loading && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-slate-300">
+                      <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
                         {t('noData')}
                       </td>
                     </tr>
@@ -381,9 +387,9 @@ export default function Home() {
           {/* Sidebar: Bar chart and guidance panel */}
           <div className="flex flex-col gap-4">
             {/* Average price by province - horizontal bar chart */}
-            <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-              <h3 className="text-base font-semibold text-white">{t('averageByProvince')}</h3>
-              <p className="text-xs text-slate-300">{t('meanPrice')}</p>
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">{t('averageByProvince')}</h3>
+              <p className="text-xs text-slate-600">{t('meanPrice')}</p>
               <div className="mt-3 flex flex-col gap-2">
                 {averages.map((item) => (
                   <BarRow
@@ -394,7 +400,7 @@ export default function Home() {
                     formatter={(v) => `${numberFormat.format(Math.round(v))} KHR`}
                   />
                 ))}
-                {!averages.length && <p className="text-sm text-slate-400">{t('noDataDisplay')}</p>}
+                {!averages.length && <p className="text-sm text-slate-500">{t('noDataDisplay')}</p>}
               </div>
             </div>
           </div>
@@ -426,16 +432,16 @@ type FilterSelectProps = {
 
 function FilterSelect({ label, value, onChange, options, disabled }: FilterSelectProps) {
   return (
-    <label className="flex flex-col gap-1 text-sm text-slate-200">
-      <span className="text-xs uppercase tracking-wide text-slate-400">{label}</span>
+    <label className="flex flex-col gap-1 text-sm text-slate-700">
+      <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
       <select
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/40 disabled:opacity-60"
+        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-200 disabled:opacity-60"
       >
         {options.map((opt, index) => (
-          <option key={`${opt.value}-${index}`} value={opt.value} className="bg-slate-900 text-white">
+          <option key={`${opt.value}-${index}`} value={opt.value} className="bg-white text-slate-800">
             {opt.label}
           </option>
         ))}
@@ -454,10 +460,10 @@ type KpiCardProps = { title: string; value: string; detail?: string };
 
 function KpiCard({ title, value, detail }: KpiCardProps) {
   return (
-    <div className="rounded-2xl bg-white/5 p-4 shadow-lg ring-1 ring-white/10">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
-      {detail && <p className="text-xs text-slate-300">{detail}</p>}
+    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      {detail && <p className="text-xs text-slate-600">{detail}</p>}
     </div>
   );
 }
@@ -481,11 +487,11 @@ function BarRow({ label, value, max, formatter }: BarRowProps) {
   const width = Math.max(10, Math.min(100, Math.round((value / max) * 100)));
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-xs text-slate-300">
-        <span className="text-slate-100">{label}</span>
+      <div className="flex items-center justify-between text-xs text-slate-600">
+        <span className="text-slate-800">{label}</span>
         <span>{formatter(value)}</span>
       </div>
-      <div className="h-2 rounded-full bg-white/10">
+      <div className="h-2 rounded-full bg-slate-200">
         <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-500" style={{ width: `${width}%` }} />
       </div>
     </div>
@@ -505,7 +511,7 @@ type PriceTrendBadgeProps = {
 function PriceTrendBadge({ trend, labels }: PriceTrendBadgeProps) {
   if (!trend) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/20 px-2 py-0.5 text-xs text-slate-400">
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
         —
       </span>
     );
@@ -515,17 +521,17 @@ function PriceTrendBadge({ trend, labels }: PriceTrendBadgeProps) {
     up: {
       icon: "↑",
       label: labels.up,
-      className: "bg-red-500/20 text-red-400",
+      className: "bg-red-100 text-red-600",
     },
     down: {
       icon: "↓",
       label: labels.down,
-      className: "bg-green-500/20 text-green-400",
+      className: "bg-green-100 text-green-600",
     },
     same: {
       icon: "→",
       label: labels.same,
-      className: "bg-slate-500/20 text-slate-400",
+      className: "bg-slate-100 text-slate-500",
     },
   };
 
