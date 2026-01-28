@@ -28,11 +28,17 @@
   "loading": "Loading…",
   "switchLanguage": "Switch Language",
   "updated": "Updated",
-  "simpleMean": "Simple mean across returned rows",
+  "simpleMean": "Mean price across all years",
   "uniqueMarkets": "Unique retail markets",
   "distinctItems": "Distinct items with prices",
   "was": "was",
   "up": "Up",
   "down": "Down",
-  "same": "Same"
+  "same": "Same",
+  "showMore": "Show More",
+  "showLess": "Show Less",
+  "moreItems": "more",
+  "showing": "Showing",
+  "of": "of",
+  "items": "items"
 }

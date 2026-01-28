@@ -12,18 +12,18 @@ import { getFilters, getItemsByLocation } from "@/lib/db";
  * - district: District ID to filter items (requires province)
  * - locale: Language locale (en or km) to select database
  */
-export function GET(request: NextRequest) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const provinceId = searchParams.get("province") ? Number(searchParams.get("province")) : undefined;
   const districtId = searchParams.get("district") ? Number(searchParams.get("district")) : undefined;
   const locale = searchParams.get("locale") || 'en';
 
   // Get base filters (provinces with districts)
-  const filters = getFilters(locale);
+  const filters = await getFilters(locale);
 
   // If province or district is specified, get filtered items
   if (provinceId || districtId) {
-    const filteredItems = getItemsByLocation({ provinceId, districtId, locale });
+    const filteredItems = await getItemsByLocation({ provinceId, districtId, locale });
     return NextResponse.json({
       provinces: filters.provinces,
       items: filteredItems,

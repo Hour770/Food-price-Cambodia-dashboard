@@ -1,9 +1,27 @@
-import Database from "better-sqlite3";
-import { existsSync } from "fs";
-import path from "path";
 
-export type PriceRow = {
-  id: number;
+
+const mongoose = require('mongoose');
+
+const connectionPromise = mongoose.connect('mongodb://localhost:27017/Cambodia-Food-Price')
+.then(() => {
+  console.log("Connected to MongoDB in Docker");
+  return mongoose.connection;
+})
+.catch((err: any) => {
+  console.error("Connection error:", err);
+  throw err;
+});
+
+// Helper to get the mongoose connection (waits for connection to be ready)
+async function getDb() {
+  await connectionPromise;
+  return mongoose.connection.db;
+}
+
+
+
+export interface PriceRow {
+  id: string;
   item: string;
   category: string;
   unit: string;
@@ -13,7 +31,7 @@ export type PriceRow = {
   province: string;
   district: string;
   market: string;
-};
+}
 
 export type Overview = {
   lastUpdated: string | null;
@@ -27,319 +45,197 @@ export type Filters = {
   items: { id: number; name: string; unit: string; category: string }[];
 };
 
-// Database paths for each locale
-const dbPaths = {
-  en: path.join(process.cwd(), "database", "food_price_en.sqlite"),
-  km: path.join(process.cwd(), "database", "food_price_kh.sqlite"),
-};
 
-// Cache for database instances
-const dbCache: Record<string, Database.Database> = {};
-
-// Get database instance for a specific locale
-function getDb(locale: string = 'en'): Database.Database {
-  const validLocale = locale === 'km' ? 'km' : 'en';
-  
-  if (!dbCache[validLocale]) {
-    const dbPath = dbPaths[validLocale];
-    if (!existsSync(dbPath)) {
-      throw new Error(`Database file not found: ${dbPath}`);
-    }
-    dbCache[validLocale] = new Database(dbPath);
-  }
-  
-  return dbCache[validLocale];
+// Helper to get collection by locale
+function getCollection(locale: string = 'en') {
+  // You may want to use different collections for each locale
+  return locale === 'km' ? 'food_prices_kh' : 'food_prices_en';
 }
 
-// Get table name for a specific database
-function getTableName(db: Database.Database, locale: string): string {
-  const candidateTables = locale === 'km' 
-    ? ["food_price_kh", "food_price_san"]
-    : ["food_price_en", "food_prices"];
-    
-  for (const name of candidateTables) {
-    const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(name) as
-      | { name: string }
-      | undefined;
-    if (row) return row.name;
-  }
-  
-  // Fallback: get first available table
-  const anyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1").get() as
-    | { name: string }
-    | undefined;
-  if (anyTable) return anyTable.name;
-  
-  throw new Error(`No valid table found in database for locale: ${locale}`);
-}
 
-export function getFilters(locale: string = 'en'): Filters {
-  const db = getDb(locale);
-  const TABLE = getTableName(db, locale);
-  
-  const provinces = db
-    .prepare(`SELECT DISTINCT admin1 AS name FROM ${TABLE} WHERE admin1 IS NOT NULL ORDER BY admin1`)
-    .all() as { name: string }[];
 
-  const districts = db
-    .prepare(
-      `SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin1 IS NOT NULL AND admin2 IS NOT NULL ORDER BY admin1, admin2`,
-    )
-    .all() as { admin1: string; admin2: string }[];
-
-  const items = db
-    .prepare(
-      `SELECT DISTINCT commodity AS name, unit, category, MIN(rowid) AS id FROM ${TABLE} WHERE commodity IS NOT NULL GROUP BY commodity, unit, category ORDER BY category, name`,
-    )
-    .all() as { id: number; name: string; unit: string; category: string }[];
-
-  const provincesWithDistricts = provinces.map((p, idx) => ({
+export async function getFilters(locale: string = 'en'): Promise<Filters> {
+  const db = await getDb();
+  const collection = db.collection(getCollection(locale));
+  const provinces = await collection.distinct('admin1', { admin1: { $ne: null } });
+  const districts = await collection.aggregate([
+    { $match: { admin1: { $ne: null }, admin2: { $ne: null } } },
+    { $group: { _id: { admin1: "$admin1", admin2: "$admin2" } } },
+    { $sort: { "_id.admin1": 1, "_id.admin2": 1 } }
+  ]).toArray();
+  const items = await collection.aggregate([
+    { $match: { commodity: { $ne: null } } },
+    { $group: { _id: { name: "$commodity", unit: "$unit", category: "$category" } } },
+    { $sort: { "_id.category": 1, "_id.name": 1 } }
+  ]).toArray();
+  const provincesWithDistricts = provinces.map((p: string, idx: number) => ({
     id: idx + 1,
-    name: p.name,
+    name: p,
     districts: districts
-      .filter((d) => d.admin1 === p.name)
-      .map((d, dIdx) => ({ id: dIdx + 1, name: d.admin2 })),
+      .filter((d: any) => d._id.admin1 === p)
+      .map((d: any, dIdx: number) => ({ id: dIdx + 1, name: d._id.admin2 })),
   }));
-
-  return { provinces: provincesWithDistricts, items };
+  return {
+    provinces: provincesWithDistricts,
+    items: items.map((i: any, idx: number) => ({
+      id: idx + 1,
+      name: i._id.name,
+      unit: i._id.unit,
+      category: i._id.category,
+    })),
+  };
 }
 
 /**
  * Get food items filtered by province and/or district
  * Returns only items that have price records in the specified location
  */
-export function getItemsByLocation(params: {
+export async function getItemsByLocation(params: {
   provinceId?: number;
   districtId?: number;
   locale?: string;
-}): { id: number; name: string; unit: string; category: string }[] {
-  const db = getDb(params.locale);
-  const TABLE = getTableName(db, params.locale || 'en');
-  
-  const conditions: string[] = ["commodity IS NOT NULL"];
-  const values: Record<string, unknown> = {};
-
-  // Get province and district lookups
-  const provinceLookup = db
-    .prepare(`SELECT DISTINCT admin1 FROM ${TABLE} WHERE admin1 IS NOT NULL ORDER BY admin1`)
-    .all() as { admin1: string }[];
-  const districtLookup = db
-    .prepare(`SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin2 IS NOT NULL ORDER BY admin1, admin2`)
-    .all() as { admin1: string; admin2: string }[];
-
-  // Filter by province if specified
+}): Promise<{ id: number; name: string; unit: string; category: string }[]> {
+  const db = await getDb();
+  const collection = db.collection(getCollection(params.locale));
+  const provinces = await collection.distinct('admin1', { admin1: { $ne: null } });
+  const districts = await collection.aggregate([
+    { $match: { admin1: { $ne: null }, admin2: { $ne: null } } },
+    { $group: { _id: { admin1: "$admin1", admin2: "$admin2" } } },
+    { $sort: { "_id.admin1": 1, "_id.admin2": 1 } }
+  ]).toArray();
+  let match: any = { commodity: { $ne: null } };
   if (params.provinceId) {
-    const province = provinceLookup[params.provinceId - 1]?.admin1;
-    if (province) {
-      conditions.push("admin1 = @province");
-      values.province = province;
+    const province = provinces[params.provinceId - 1];
+    if (province) match.admin1 = province;
+    if (params.districtId) {
+      const districtsForProvince = districts.filter((d: any) => d._id.admin1 === province);
+      const district = districtsForProvince[params.districtId - 1]?._id.admin2;
+      if (district) match.admin2 = district;
     }
   }
-
-  // Filter by district if specified (requires province)
-  if (params.districtId && params.provinceId) {
-    const districtsForProvince = districtLookup.filter(
-      (d) => d.admin1 === provinceLookup[params.provinceId! - 1]?.admin1
-    );
-    const district = districtsForProvince[params.districtId - 1]?.admin2;
-    if (district) {
-      conditions.push("admin2 = @district");
-      values.district = district;
-    }
-  }
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const sql = `
-    SELECT DISTINCT commodity AS name, unit, category, MIN(rowid) AS id
-    FROM ${TABLE}
-    ${where}
-    GROUP BY commodity, unit, category
-    ORDER BY category, name
-  `;
-
-  return db.prepare(sql).all(values) as { id: number; name: string; unit: string; category: string }[];
-}
-
-export function getPriceRows(params: {
-  provinceId?: number;  // Made optional to allow fetching all provinces
-  districtId?: number;
-  itemName?: string;    // Use item name for consistent identification
-  limit?: number;
-  locale?: string;
-}): PriceRow[] {
-  const db = getDb(params.locale);
-  const TABLE = getTableName(db, params.locale || 'en');
-  
-  const conditions: string[] = [];
-  const values: Record<string, unknown> = {};
-
-  const provinceLookup = db
-    .prepare(`SELECT DISTINCT admin1 FROM ${TABLE} WHERE admin1 IS NOT NULL ORDER BY admin1`)
-    .all() as { admin1: string }[];
-  const districtLookup = db
-    .prepare(`SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin2 IS NOT NULL ORDER BY admin1, admin2`)
-    .all() as { admin1: string; admin2: string }[];
-
-  if (params.provinceId) {
-    const province = provinceLookup[params.provinceId - 1]?.admin1;
-    if (province) {
-      conditions.push("admin1 = @province");
-      values.province = province;
-    }
-  }
-
-  if (params.districtId && params.provinceId) {
-    const districtsForProvince = provinceLookup[params.provinceId - 1]?.admin1
-      ? districtLookup.filter((d) => d.admin1 === provinceLookup[params.provinceId! - 1].admin1)
-      : districtLookup;
-    const district = districtsForProvince[params.districtId - 1]?.admin2;
-    if (district) {
-      conditions.push("admin2 = @district");
-      values.district = district;
-    }
-  }
-
-  // Filter by item name directly (no lookup needed)
-  if (params.itemName) {
-    conditions.push("commodity = @commodity");
-    values.commodity = params.itemName;
-  }
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const limit = params.limit ?? 200;
-
-  const sql = `
-    SELECT rowid as id,
-           date,
-           admin1,
-           admin2,
-           market,
-           category,
-           commodity,
-           unit,
-           priceType,
-           currency,
-           price
-    FROM ${TABLE}
-    ${where}
-    ORDER BY date DESC, id DESC
-    LIMIT ${limit};
-  `;
-
-  const rows = db.prepare(sql).all(values) as {
-    id: number;
-    date: string;
-    admin1: string;
-    admin2: string;
-    market: string;
-    category: string;
-    commodity: string;
-    unit: string;
-    priceType?: string;
-    currency: string;
-    price: number;
-  }[];
-
-  return rows.map((r, idx) => ({
-    id: r.id ?? idx,
-    item: r.commodity,
-    category: r.category,
-    unit: r.unit,
-    price: r.price,
-    currency: r.currency,
-    date: r.date,
-    province: r.admin1,
-    district: r.admin2,
-    market: r.market,
+  const items = await collection.aggregate([
+    { $match: match },
+    { $group: { _id: { name: "$commodity", unit: "$unit", category: "$category" } } },
+    { $sort: { "_id.category": 1, "_id.name": 1 } }
+  ]).toArray();
+  return items.map((i: any, idx: number) => ({
+    id: idx + 1,
+    name: i._id.name,
+    unit: i._id.unit,
+    category: i._id.category,
   }));
 }
 
-export function getOverview(params?: { provinceId?: number; districtId?: number; itemName?: string; locale?: string }): Overview {
-  const db = getDb(params?.locale);
-  const TABLE = getTableName(db, params?.locale || 'en');
+export async function getPriceRows(params: {
+  provinceId?: number;
+  districtId?: number;
+  itemName?: string;
+  limit?: number;
+  locale?: string;
+}): Promise<PriceRow[]> {
+  const db = await getDb();
+  const collection = db.collection(getCollection(params.locale));
+  const provinces = await collection.distinct('admin1', { admin1: { $ne: null } });
+  const districts = await collection.aggregate([
+    { $match: { admin1: { $ne: null }, admin2: { $ne: null } } },
+    { $group: { _id: { admin1: "$admin1", admin2: "$admin2" } } },
+    { $sort: { "_id.admin1": 1, "_id.admin2": 1 } }
+  ]).toArray();
   
-  const conditions: string[] = [];
-  const values: Record<string, unknown> = {};
-  const provinceLookup = db
-    .prepare(`SELECT DISTINCT admin1 FROM ${TABLE} WHERE admin1 IS NOT NULL ORDER BY admin1`)
-    .all() as { admin1: string }[];
-  const districtLookup = db
-    .prepare(`SELECT DISTINCT admin1, admin2 FROM ${TABLE} WHERE admin2 IS NOT NULL ORDER BY admin1, admin2`)
-    .all() as { admin1: string; admin2: string }[];
+  // Base query: always filter out null commodities
+  let query: any = { commodity: { $ne: null } };
+  
+  if (params.provinceId) {
+    const province = provinces[params.provinceId - 1];
+    if (province) query.admin1 = province;
+    if (params.districtId) {
+      const districtsForProvince = districts.filter((d: any) => d._id.admin1 === province);
+      const district = districtsForProvince[params.districtId - 1]?._id.admin2;
+      if (district) query.admin2 = district;
+    }
+  }
+  if (params.itemName) {
+    query.commodity = params.itemName;
+  }
+  const limit = params.limit ?? 200;
+  const rows = await collection.find(query).sort({ date: -1, _id: -1 }).limit(limit).toArray();
+  
+  return rows.map((r: any) => {
+    // Handle price conversion - could be number, string, or null/undefined
+    let price = 0;
+    if (typeof r.price === 'number') {
+      price = r.price;
+    } else if (typeof r.price === 'string') {
+      const parsed = parseFloat(r.price);
+      price = isNaN(parsed) ? 0 : parsed;
+    }
+    
+    return {
+      id: r._id.toString(),
+      item: r.commodity,
+      category: r.category,
+      unit: r.unit,
+      price,
+      currency: r.currency,
+      date: r.date,
+      province: r.admin1,
+      district: r.admin2,
+      market: r.market,
+    };
+  });
+}
 
+export async function getOverview(params?: { provinceId?: number; districtId?: number; itemName?: string; locale?: string }): Promise<Overview> {
+  const db = await getDb();
+  const collection = db.collection(getCollection(params?.locale));
+  const provinces = await collection.distinct('admin1', { admin1: { $ne: null } });
+  const districts = await collection.aggregate([
+    { $match: { admin1: { $ne: null }, admin2: { $ne: null } } },
+    { $group: { _id: { admin1: "$admin1", admin2: "$admin2" } } },
+    { $sort: { "_id.admin1": 1, "_id.admin2": 1 } }
+  ]).toArray();
+  let query: any = {};
   if (params?.provinceId) {
-    const province = provinceLookup[params.provinceId - 1]?.admin1;
-    if (province) {
-      conditions.push("admin1 = @province");
-      values.province = province;
+    const province = provinces[params.provinceId - 1];
+    if (province) query.admin1 = province;
+    if (params?.districtId) {
+      const districtsForProvince = districts.filter((d: any) => d._id.admin1 === province);
+      const district = districtsForProvince[params.districtId - 1]?._id.admin2;
+      if (district) query.admin2 = district;
     }
   }
-  // Filter districts by selected province first, then lookup by districtId
-  if (params?.districtId && params?.provinceId) {
-    const province = provinceLookup[params.provinceId - 1]?.admin1;
-    const districtsForProvince = districtLookup.filter((d) => d.admin1 === province);
-    const district = districtsForProvince[params.districtId - 1]?.admin2;
-    if (district) {
-      conditions.push("admin2 = @district");
-      values.district = district;
-    }
-  }
-  // Use item name directly instead of looking up by ID
   if (params?.itemName) {
-    conditions.push("commodity = @commodity");
-    values.commodity = params.itemName;
+    query.commodity = params.itemName;
   }
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const lastUpdatedRow = db
-    .prepare(`SELECT MAX(date) as lastUpdated FROM ${TABLE} ${where}`)
-    .get(values) as { lastUpdated: string | null };
-
-  const totalItemsRow = db
-    .prepare(`SELECT COUNT(DISTINCT commodity) as totalItems FROM ${TABLE} ${where}`)
-    .get(values) as { totalItems: number };
-
-  const totalMarketsRow = db
-    .prepare(`SELECT COUNT(DISTINCT market) as totalMarkets FROM ${TABLE} ${where}`)
-    .get(values) as { totalMarkets: number };
-
-  const averagePriceRow = db
-    .prepare(`SELECT AVG(price) as averagePrice FROM ${TABLE} ${where}`)
-    .get(values) as { averagePrice: number | null };
-
+  const lastUpdatedRow = await collection.find(query).sort({ date: -1 }).limit(1).toArray();
+  const lastUpdated = lastUpdatedRow[0]?.date || null;
+  const totalItems = await collection.distinct('commodity', query);
+  const totalMarkets = await collection.distinct('market', query);
+  const avg = await collection.aggregate([
+    { $match: query },
+    { $addFields: { priceNum: { $toDouble: "$price" } } },
+    { $group: { _id: null, averagePrice: { $avg: "$priceNum" } } }
+  ]).toArray();
   return {
-    lastUpdated: lastUpdatedRow.lastUpdated,
-    totalItems: totalItemsRow.totalItems,
-    totalMarkets: totalMarketsRow.totalMarkets,
-    averagePrice: averagePriceRow.averagePrice,
+    lastUpdated,
+    totalItems: totalItems.length,
+    totalMarkets: totalMarkets.length,
+    averagePrice: avg[0]?.averagePrice ?? null,
   };
 }
 
-export function getAveragesByProvince(itemName?: string, locale?: string) {
-  const db = getDb(locale);
-  const TABLE = getTableName(db, locale || 'en');
-  
-  const conditions: string[] = [];
-  const values: Record<string, unknown> = {};
-
-  // Use item name directly instead of looking up by ID
-  if (itemName) {
-    conditions.push("commodity = @commodity");
-    values.commodity = itemName;
-  }
-
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  const sql = `
-    SELECT admin1 as province,
-           AVG(price) as averagePrice
-    FROM ${TABLE}
-    ${where}
-    GROUP BY admin1
-    ORDER BY averagePrice DESC;
-  `;
-
-  return db.prepare(sql).all(values) as { province: string; averagePrice: number }[];
+export async function getAveragesByProvince(itemName?: string, locale?: string) {
+  const db = await getDb();
+  const collection = db.collection(getCollection(locale));
+  let match: any = {};
+  if (itemName) match.commodity = itemName;
+  console.log("getAveragesByProvince - match:", match, "collection:", getCollection(locale));
+  const result = await collection.aggregate([
+    { $match: match },
+    { $addFields: { priceNum: { $toDouble: "$price" } } },
+    { $group: { _id: "$admin1", averagePrice: { $avg: "$priceNum" } } },
+    { $sort: { averagePrice: -1 } }
+  ]).toArray();
+  console.log("getAveragesByProvince - result count:", result.length);
+  return result.map((r: any) => ({ province: r._id, averagePrice: r.averagePrice }));
 }
