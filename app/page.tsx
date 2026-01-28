@@ -86,6 +86,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   // ---------------------------------------------------------------------------
+  // STATE: Pagination for table rows
+  // ---------------------------------------------------------------------------
+  const [visibleRows, setVisibleRows] = useState(10);
+
+  // ---------------------------------------------------------------------------
   // EFFECT: Load filter options (provinces & items) on initial mount or locale change
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -132,6 +137,7 @@ export default function Home() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setVisibleRows(10); // Reset pagination when filters change
       
       // Build query string from active filters
       const query = new URLSearchParams();
@@ -173,30 +179,76 @@ export default function Home() {
   const numberFormat = useMemo(() => new Intl.NumberFormat("en-KH"), []);
 
   // ---------------------------------------------------------------------------
-  // COMPUTED: Deduplicate prices by item and calculate price trends
-  // Groups by item name, keeps the latest price, compares with previous price
+  // COMPUTED: Deduplicate prices with different grouping strategies:
+  // - No filters: Group by item, show all 19 food items with highest price among 25 provinces
+  // - Only food filter: Group by item + province, show all 25 provinces ordered by highest price
+  // - Province filter: Group by item + district, show all districts
+  // - Province + District filter: Group by item only
   // ---------------------------------------------------------------------------
   const deduplicatedPrices = useMemo((): DeduplicatedPriceRow[] => {
-    // Group prices by item name
+    // Helper function to check if price is non-zero (handles string/number)
+    const isNonZeroPrice = (price: number | string): boolean => {
+      const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+      return numPrice !== 0 && !isNaN(numPrice) && numPrice !== null && numPrice !== undefined;
+    };
+
+    // Determine grouping strategy based on filters
+    // Case 1: No province, no item filter - group by item only, show highest price per item
+    // Case 2: No province, has item filter - group by item + province, show all provinces sorted by price
+    // Case 3: Has province (with or without district) - group by item only, show highest price per item in that province
+    let groupingMode: 'no-filters' | 'food-only' | 'province-selected';
+    
+    if (!provinceId && !itemName) {
+      groupingMode = 'no-filters';
+    } else if (!provinceId && itemName) {
+      groupingMode = 'food-only';
+    } else {
+      // Province is selected (with or without district filter)
+      groupingMode = 'province-selected';
+    }
+
     const itemGroups = new Map<string, PriceRow[]>();
     
     prices.forEach((row) => {
-      const existing = itemGroups.get(row.item) || [];
+      // Skip rows with missing item name
+      if (!row.item) return;
+      
+      let groupKey: string;
+      if (groupingMode === 'no-filters') {
+        // Group by item only - show one entry per food item with highest price
+        groupKey = row.item;
+      } else if (groupingMode === 'food-only') {
+        // Group by item + province - show all provinces for the selected food
+        groupKey = `${row.item}|||${row.province}`;
+      } else {
+        // Province selected - group by item only, show highest price per food in this province
+        groupKey = row.item;
+      }
+      const existing = itemGroups.get(groupKey) || [];
       existing.push(row);
-      itemGroups.set(row.item, existing);
+      itemGroups.set(groupKey, existing);
     });
 
-    // For each item, get the latest price and compare with previous
+    // For each group, get the appropriate price based on grouping mode
     const result: DeduplicatedPriceRow[] = [];
     
-    itemGroups.forEach((rows) => {
-      // Sort by date descending to get latest first
-      const sorted = [...rows].sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+    itemGroups.forEach((rows, key) => {
+      // Filter to only non-zero prices first
+      const nonZeroRows = rows.filter(row => isNonZeroPrice(row.price));
       
-      const latest = sorted[0];
-      const previous = sorted[1] || null;
+      // If no non-zero price exists, skip this item
+      if (nonZeroRows.length === 0) {
+        return;
+      }
+
+      let latest: PriceRow;
+      let previous: PriceRow | null = null;
+
+      // For all modes: find the highest non-zero price in the group
+      const sortedByPrice = [...nonZeroRows].sort((a, b) => b.price - a.price);
+      latest = sortedByPrice[0];
+      // Previous is the second highest price for trend comparison
+      previous = sortedByPrice[1] || null;
       
       // Determine price trend
       let trend: "up" | "down" | "same" | null = null;
@@ -217,9 +269,19 @@ export default function Home() {
       });
     });
 
-    // Sort by item name for consistent display
-    return result.sort((a, b) => a.item.localeCompare(b.item));
-  }, [prices]);
+    // Sort based on grouping mode
+    if (groupingMode === 'food-only') {
+      // When filtering by food only, sort by price descending (highest first)
+      return result.sort((a, b) => b.price - a.price);
+    } else {
+      // Otherwise sort by item name, then by province/district
+      return result.sort((a, b) => {
+        const itemCompare = a.item.localeCompare(b.item);
+        if (itemCompare !== 0) return itemCompare;
+        return a.province.localeCompare(b.province);
+      });
+    }
+  }, [prices, provinceId, districtId, itemName]);
 
   // ===========================================================================
   // RENDER: Main dashboard layout
@@ -321,7 +383,7 @@ export default function Home() {
         {/* -------------------------------------------------------------------
             MAIN CONTENT: Price table and sidebar widgets
         ------------------------------------------------------------------- */}
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
           
           {/* Price data table - spans 2 columns on large screens */}
           <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm lg:col-span-2">
@@ -346,7 +408,7 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {/* Display deduplicated price records with trend indicators */}
-                  {deduplicatedPrices.slice(0, 25).map((row) => (
+                  {deduplicatedPrices.slice(0, visibleRows).map((row) => (
                     <tr key={row.id} className="border-t border-slate-200 hover:bg-slate-100">
                       <td className="px-3 py-2">
                         <div className="font-semibold text-slate-900">{row.item}</div>
@@ -381,16 +443,39 @@ export default function Home() {
                   )}
                 </tbody>
               </table>
+              {/* Show More / Show Less buttons */}
+              {deduplicatedPrices.length > 0 && (
+                <div className="flex justify-center gap-3 py-3 border-t border-slate-200 bg-slate-50">
+                  {visibleRows < deduplicatedPrices.length ? (
+                    <button
+                      onClick={() => setVisibleRows(prev => Math.min(prev + 10, deduplicatedPrices.length))}
+                      className="px-4 py-2 text-sm font-medium text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded-lg transition-colors"
+                    >
+                      {t('showMore')} ({Math.min(10, deduplicatedPrices.length - visibleRows)} {t('moreItems')})
+                    </button>
+                  ) : visibleRows > 10 ? (
+                    <button
+                      onClick={() => setVisibleRows(10)}
+                      className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      {t('showLess')}
+                    </button>
+                  ) : null}
+                  <span className="px-3 py-2 text-xs text-slate-500">
+                    {t('showing')} {Math.min(visibleRows, deduplicatedPrices.length)} {t('of')} {deduplicatedPrices.length} {t('items')}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Sidebar: Bar chart and guidance panel */}
-          <div className="flex flex-col gap-4">
+          <div className="lg:sticky lg:top-4">
             {/* Average price by province - horizontal bar chart */}
             <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200 shadow-sm">
               <h3 className="text-base font-semibold text-slate-900">{t('averageByProvince')}</h3>
               <p className="text-xs text-slate-600">{t('meanPrice')}</p>
-              <div className="mt-3 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-2 overflow-y-auto max-h-[500px]">
                 {averages.map((item) => (
                   <BarRow
                     key={item.province}
