@@ -1,24 +1,25 @@
-
-
 const mongoose = require('mongoose');
+const URI = process.env.URI as string;
+const DB_NAME = process.env.DB_NAME as string;
 
-const connectionPromise = mongoose.connect('mongodb://localhost:27017/Cambodia-Food-Price')
-.then(() => {
-  console.log("Connected to MongoDB in Docker");
-  return mongoose.connection;
-})
-.catch((err: any) => {
-  console.error("Connection error:", err);
-  throw err;
-});
 
-// Helper to get the mongoose connection (waits for connection to be ready)
-async function getDb() {
-  await connectionPromise;
-  return mongoose.connection.db;
+if (!URI || !DB_NAME) {
+  throw new Error('MongoDB connection variables missing.');
 }
+const connectionPromise = mongoose.connect(URI, { dbName: DB_NAME })
+// const connectionPromise = mongoose.connect(URI)
 
 
+async function getDb() {
+  try{
+      await connectionPromise;
+      console.log("Database connected successful")
+      return mongoose.connection.db;
+  } catch(error){
+    console.log('Fail to connect', error)
+    throw error;
+  }
+}
 
 export interface PriceRow {
   id: string;
