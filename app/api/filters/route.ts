@@ -13,22 +13,26 @@ import { getFilters, getItemsByLocation } from "@/lib/db";
  * - locale: Language locale (en or km) to select database
  */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const provinceId = searchParams.get("province") ? Number(searchParams.get("province")) : undefined;
-  const districtId = searchParams.get("district") ? Number(searchParams.get("district")) : undefined;
-  const locale = searchParams.get("locale") || 'en';
+  try {
+    const { searchParams } = new URL(request.url);
+    const provinceId = searchParams.get("province") ? Number(searchParams.get("province")) : undefined;
+    const districtId = searchParams.get("district") ? Number(searchParams.get("district")) : undefined;
+    const locale = searchParams.get("locale") || 'en';
 
-  // Get base filters (provinces with districts)
-  const filters = await getFilters(locale);
+    // Get base filters (provinces with districts)
+    const filters = await getFilters(locale);
 
-  // If province or district is specified, get filtered items
-  if (provinceId || districtId) {
-    const filteredItems = await getItemsByLocation({ provinceId, districtId, locale });
-    return NextResponse.json({
-      provinces: filters.provinces,
-      items: filteredItems,
-    });
+    // If province or district is specified, get filtered items
+    if (provinceId || districtId) {
+      const filteredItems = await getItemsByLocation({ provinceId, districtId, locale });
+      return NextResponse.json({
+        provinces: filters.provinces,
+        items: filteredItems,
+      });
+    }
+
+    return NextResponse.json(filters);
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to load filters', details: error instanceof Error ? error.message : error }, { status: 500 });
   }
-
-  return NextResponse.json(filters);
 }
