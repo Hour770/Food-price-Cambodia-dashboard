@@ -95,14 +95,22 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     async function loadFilters() {
-      const res = await fetch(`/api/filters?locale=${currentLocale}`, { cache: "no-store" });
-      const data = await res.json();
-      setProvinces(data.provinces); // Populate province dropdown
-      setItems(data.items);         // Populate food item dropdown (all items initially)
-      // Reset selections when locale changes
-      setProvinceId(undefined);
-      setDistrictId(undefined);
-      setItemName(undefined);
+      try {
+        const res = await fetch(`/api/filters?locale=${currentLocale}`, { cache: "no-store" });
+        if (!res.ok) {
+          console.error('Failed to load filters:', res.status);
+          return;
+        }
+        const data = await res.json();
+        setProvinces(data.provinces || []); // Populate province dropdown
+        setItems(data.items || []);         // Populate food item dropdown (all items initially)
+        // Reset selections when locale changes
+        setProvinceId(undefined);
+        setDistrictId(undefined);
+        setItemName(undefined);
+      } catch (error) {
+        console.error('Error loading filters:', error);
+      }
     }
     loadFilters();
   }, [currentLocale]); // Re-run when locale changes
@@ -113,19 +121,27 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     async function loadFilteredItems() {
-      // Build query string for location filter
-      const query = new URLSearchParams();
-      query.append("locale", currentLocale);
-      if (provinceId) query.append("province", String(provinceId));
-      if (districtId) query.append("district", String(districtId));
+      try {
+        // Build query string for location filter
+        const query = new URLSearchParams();
+        query.append("locale", currentLocale);
+        if (provinceId) query.append("province", String(provinceId));
+        if (districtId) query.append("district", String(districtId));
 
-      const res = await fetch(`/api/filters?${query.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      setItems(data.items); // Update items based on selected location
-      
-      // Reset item selection if current item is not available in new location
-      if (itemName && !data.items.some((i: Item) => i.name === itemName)) {
-        setItemName(undefined);
+        const res = await fetch(`/api/filters?${query.toString()}`, { cache: "no-store" });
+        if (!res.ok) {
+          console.error('Failed to load filtered items:', res.status);
+          return;
+        }
+        const data = await res.json();
+        setItems(data.items || []); // Update items based on selected location
+        
+        // Reset item selection if current item is not available in new location
+        if (itemName && data.items && !data.items.some((i: Item) => i.name === itemName)) {
+          setItemName(undefined);
+        }
+      } catch (error) {
+        console.error('Error loading filtered items:', error);
       }
     }
     loadFilteredItems();
@@ -139,26 +155,36 @@ export default function HomePage() {
       setLoading(true);
       setVisibleRows(10); // Reset pagination when filters change
       
-      // Build query string from active filters
-      const query = new URLSearchParams();
-      query.append("locale", currentLocale);
-      if (provinceId) query.append("province", String(provinceId));
-      if (districtId) query.append("district", String(districtId));
-      if (itemName) query.append("item", itemName);
+      try {
+        // Build query string from active filters
+        const query = new URLSearchParams();
+        query.append("locale", currentLocale);
+        if (provinceId) query.append("province", String(provinceId));
+        if (districtId) query.append("district", String(districtId));
+        if (itemName) query.append("item", itemName);
 
-      // Fetch price data and overview stats in parallel
-      const [pricesRes, overviewRes] = await Promise.all([
-        fetch(`/api/prices?${query.toString()}`, { cache: "no-store" }),
-        fetch(`/api/overview?${query.toString()}`, { cache: "no-store" }),
-      ]);
+        // Fetch price data and overview stats in parallel
+        const [pricesRes, overviewRes] = await Promise.all([
+          fetch(`/api/prices?${query.toString()}`, { cache: "no-store" }),
+          fetch(`/api/overview?${query.toString()}`, { cache: "no-store" }),
+        ]);
 
-      const pricesJson = await pricesRes.json();
-      const overviewJson = await overviewRes.json();
+        if (!pricesRes.ok || !overviewRes.ok) {
+          console.error('Failed to load data:', pricesRes.status, overviewRes.status);
+          setLoading(false);
+          return;
+        }
 
-      // Update state with fetched data
-      setPrices(pricesJson.data || []);
-      setOverview(overviewJson.overview);
-      setAverages(overviewJson.averages || []);
+        const pricesJson = await pricesRes.json();
+        const overviewJson = await overviewRes.json();
+
+        // Update state with fetched data
+        setPrices(pricesJson.data || []);
+        setOverview(overviewJson.overview || null);
+        setAverages(overviewJson.averages || []);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
       setLoading(false);
     }
 

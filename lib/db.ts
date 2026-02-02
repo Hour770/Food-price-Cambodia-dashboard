@@ -1,22 +1,28 @@
 const mongoose = require('mongoose');
-const URI = process.env.URI as string;
-const DB_NAME = process.env.DB_NAME as string;
 
-
-if (!URI || !DB_NAME) {
-  throw new Error('MongoDB connection variables missing.');
-}
-const connectionPromise = mongoose.connect(URI, { dbName: DB_NAME })
-// const connectionPromise = mongoose.connect(URI)
-
+// Cache the connection promise to reuse across requests (important for serverless)
+let connectionPromise: Promise<typeof mongoose> | null = null;
 
 async function getDb() {
-  try{
-      await connectionPromise;
-      console.log("Database connected successful")
-      return mongoose.connection.db;
-  } catch(error){
-    console.log('Fail to connect', error)
+  const URI = process.env.URI;
+  const DB_NAME = process.env.DB_NAME;
+
+  if (!URI || !DB_NAME) {
+    throw new Error('MongoDB connection variables missing. Please set URI and DB_NAME environment variables.');
+  }
+
+  try {
+    // Reuse existing connection if available
+    if (!connectionPromise) {
+      connectionPromise = mongoose.connect(URI, { dbName: DB_NAME });
+    }
+    await connectionPromise;
+    console.log("Database connected successful");
+    return mongoose.connection.db;
+  } catch (error) {
+    // Reset connection promise on error to allow retry
+    connectionPromise = null;
+    console.log('Fail to connect', error);
     throw error;
   }
 }
