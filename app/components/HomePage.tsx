@@ -420,43 +420,43 @@ export default function HomePage() {
               </div>
               {loading && <span className="text-xs text-cyan-600">{t('loading')}</span>}
             </div>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-              <table className="w-full text-sm text-slate-800">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+              <table className="w-full text-sm text-slate-800 min-w-[400px]">
                 <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
                   <tr>
-                    <th className="px-3 py-2">{t('item')}</th>
-                    <th className="px-3 py-2">{t('location')}</th>
-                    <th className="px-3 py-2">{t('market')}</th>
-                    <th className="px-3 py-2 text-right">{t('price')}</th>
-                    <th className="px-3 py-2 text-center">{t('trend')}</th>
-                    <th className="px-3 py-2 text-right">{t('date')}</th>
+                    <th className="px-2 py-2 min-[426px]:px-3">{t('item')}</th>
+                    <th className="px-2 py-2 min-[426px]:px-3">{t('location')}</th>
+                    <th className="px-2 py-2 min-[426px]:px-3">{t('market')}</th>
+                    <th className="px-2 py-2 min-[426px]:px-3 text-right">{t('price')}</th>
+                    <th className="hidden min-[426px]:table-cell px-3 py-2 text-center">{t('trend')}</th>
+                    <th className="hidden min-[426px]:table-cell px-3 py-2 text-right">{t('date')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* Display deduplicated price records with trend indicators */}
                   {deduplicatedPrices.slice(0, visibleRows).map((row) => (
                     <tr key={row.id} className="border-t border-slate-200 hover:bg-slate-100">
-                      <td className="px-3 py-2">
-                        <div className="font-semibold text-slate-900">{row.item}</div>
-                        <div className="text-xs text-slate-500">{row.category} · {row.unit}</div>
+                      <td className="px-2 py-2 min-[426px]:px-3">
+                        <div className="font-semibold text-slate-900 text-xs min-[426px]:text-sm">{row.item}</div>
+                        <div className="text-[10px] min-[426px]:text-xs text-slate-500">{row.category} · {row.unit}</div>
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="text-sm text-slate-900">{row.province}</div>
-                        <div className="text-xs text-slate-500">{row.district}</div>
+                      <td className="px-2 py-2 min-[426px]:px-3">
+                        <div className="text-xs min-[426px]:text-sm text-slate-900">{row.province}</div>
+                        <div className="text-[10px] min-[426px]:text-xs text-slate-500">{row.district}</div>
                       </td>
-                      <td className="px-3 py-2 text-slate-700">{row.market}</td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="font-semibold text-cyan-600">{numberFormat.format(row.price)} {row.currency}</div>
+                      <td className="px-2 py-2 min-[426px]:px-3 text-xs min-[426px]:text-sm text-slate-700">{row.market}</td>
+                      <td className="px-2 py-2 min-[426px]:px-3 text-right">
+                        <div className="font-semibold text-cyan-600 text-xs min-[426px]:text-sm">{numberFormat.format(row.price)} {row.currency}</div>
                         {row.previousPrice && (
-                          <div className="text-xs text-slate-500">
+                          <div className="text-[10px] min-[426px]:text-xs text-slate-500">
                             {t('was')} {numberFormat.format(row.previousPrice)} {row.currency}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="hidden min-[426px]:table-cell px-3 py-2 text-center">
                         <PriceTrendBadge trend={row.trend} labels={{ up: t('up'), down: t('down'), same: t('same') }} />
                       </td>
-                      <td className="px-3 py-2 text-right text-slate-600">{row.date}</td>
+                      <td className="hidden min-[426px]:table-cell px-3 py-2 text-right text-slate-600">{row.date}</td>
                     </tr>
                   ))}
                   {/* Empty state when no data matches filters */}
