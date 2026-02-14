@@ -33,17 +33,14 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 root@${{ secrets.DROPLET_IP }} << 'EOF'   
            set -e
-            cd /Food-price-Cambodia-dashboard
+            cd ~/Food-price-Cambodia-dashboard
             git reset --hard
             git clean -fd
             git fetch origin main
             git reset --hard origin/main            
             npm install -g pm2
             npm run build || true
-            pm2 stop myapp
             pm2 restart myapp
-            pm2 start npm --name myapp -- start
             pm2 save
-            pm2 statup
 
           EOF
