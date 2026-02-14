@@ -31,7 +31,8 @@ jobs:
 
       - name: Deploy to Droplet
         run: |
-          ssh root@*** << 'EOF'
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 root@${{ secrets.DROPLET_IP }} << 'EOF'   
+           set -e
             cd /Food-price-Cambodia-dashboard
             git reset --hard
             git clean -fd
