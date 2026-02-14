@@ -27,6 +27,7 @@ jobs:
           
           # Use -v for verbose output to see why it fails
           ssh-keyscan -v -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+          
 
       - name: Deploy to Droplet
         run: |
@@ -36,6 +37,11 @@ jobs:
             
             # Navigate to folder
             cd ~/Food-price-Cambodia-dashboard
+             
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            node -v
+            npm -v
             
             # Git operations
             git remote set-url origin git@github.com:Hour770/Food-price-Cambodia-dashboard.git || true            
@@ -44,16 +50,14 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             
-            # Install Project Dependencies (This was missing!)
-            npm install
             
             # Install PM2 globally (optional if already installed, but safe to keep)
             npm install -g pm2
             
             # Build the app
             # Removed 'nohup' and logs redirection so GitHub stays connected
-            echo "Starting Build..."
-            npm run build
+            echo "Starting build in background..."
+            nohup npm run build > build.log 2>&1
             
             # Restart App
             echo "Restarting PM2..."
