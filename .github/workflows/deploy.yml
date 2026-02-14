@@ -38,10 +38,14 @@ jobs:
             cd ~/Food-price-Cambodia-dashboard
             
             # Git operations
+            git config --global http.postBuffer 524288000
+            
             git reset --hard
             git clean -fd
-            git fetch origin main
-            git reset --hard origin/main
+            
+            # Force IPv4 to avoid handshake issues
+            git -4 fetch origin main
+            git -4 reset --hard origin/main
             
             # Install Project Dependencies (This was missing!)
             npm install
