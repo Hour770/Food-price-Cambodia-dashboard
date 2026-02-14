@@ -23,12 +23,12 @@ jobs:
       - name: Deploy to Droplet
         run: |
           ssh root@${{ secrets.DROPLET_IP }} << 'EOF'
-            cd Food-price-Cambodia-dashboard
+            cd ~/Food-price-Cambodia-dashboard
             git pull origin main
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
             \. "$HOME/.nvm/nvm.sh"
             nvm install 24
-            npm install
+            npm install -g pm2
             npm run build || true
             pm2 restart myapp || pm2 start npm --name myapp -- start
           EOF
