@@ -29,10 +29,9 @@ jobs:
             git clean -fd
             git fetch origin main
             git reset --hard origin/main
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-            \. "$HOME/.nvm/nvm.sh"
-            nvm install 24
             npm install -g pm2
             nohup npm run build > build.log 2>&1
             pm2 restart myapp || pm2 start npm --name myapp -- start
+            pm2 startup
+            pm2 save
           EOF
