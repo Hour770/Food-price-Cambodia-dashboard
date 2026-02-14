@@ -23,6 +23,7 @@ jobs:
       - name: Deploy to Droplet
         run: |
           ssh root@${{ secrets.DROPLET_IP }} << 'EOF'
+            set -e
             cd ~/Food-price-Cambodia-dashboard
             git reset --hard
             git clean -fd
@@ -32,6 +33,6 @@ jobs:
             \. "$HOME/.nvm/nvm.sh"
             nvm install 24
             npm install -g pm2
-            npm run build || true
-            pm2 restart all || pm2 start npm --name app -- start
+            nohup npm run build > build.log 2>&1
+            pm2 restart myapp || pm2 start npm --name myapp -- start
           EOF
