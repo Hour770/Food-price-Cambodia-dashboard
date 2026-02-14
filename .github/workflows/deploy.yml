@@ -38,6 +38,7 @@ jobs:
             cd ~/Food-price-Cambodia-dashboard
             
             # Git operations
+            git remote set-url origin git@github.com:Hour770/Food-price-Cambodia-dashboard.git || true
             git reset --hard
             git clean -fd
             git fetch origin main
