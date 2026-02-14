@@ -22,16 +22,32 @@ jobs:
 
       - name: Deploy to Droplet
         run: |
-          ssh root@${{ secrets.DROPLET_IP }} << 'EOF'
+          # Added Keep-Alive flags to prevent Broken Pipe
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=120 root@${{ secrets.DROPLET_IP }} << 'EOF'
             set -e
+            
+            # Navigate to folder
             cd ~/Food-price-Cambodia-dashboard
+            
+            # Git operations
             git reset --hard
             git clean -fd
             git fetch origin main
             git reset --hard origin/main
+            
+            # Install Project Dependencies (This was missing!)
+            npm install
+            
+            # Install PM2 globally (optional if already installed, but safe to keep)
             npm install -g pm2
-            nohup npm run build > build.log 2>&1
+            
+            # Build the app
+            # Removed 'nohup' and logs redirection so GitHub stays connected
+            echo "Starting Build..."
+            npm run build
+            
+            # Restart App
+            echo "Restarting PM2..."
             pm2 restart myapp || pm2 start npm --name myapp -- start
-            pm2 startup
             pm2 save
           EOF
