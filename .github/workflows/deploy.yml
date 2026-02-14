@@ -24,8 +24,7 @@ jobs:
           
           echo "${{ secrets.SSH }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Use -v for verbose output to see why it fails
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
           ssh-keyscan -v -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
           
 
