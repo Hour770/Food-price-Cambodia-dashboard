@@ -16,9 +16,17 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
+          # Check if the secret is actually loading
+          if [ -z "${{ secrets.DROPLET_IP }}" ]; then
+            echo "Error: DROPLET_IP secret is empty"
+            exit 1
+          fi
+          
           echo "${{ secrets.SSH }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+          
+          # Use -v for verbose output to see why it fails
+          ssh-keyscan -v -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Droplet
         run: |
