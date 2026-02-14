@@ -24,11 +24,14 @@ jobs:
         run: |
           ssh root@${{ secrets.DROPLET_IP }} << 'EOF'
             cd ~/Food-price-Cambodia-dashboard
-            git pull origin main
+            git reset --hard
+            git clean -fd
+            git fetch origin main
+            git reset --hard origin/main
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
             \. "$HOME/.nvm/nvm.sh"
             nvm install 24
             npm install -g pm2
             npm run build || true
-            pm2 restart myapp || pm2 start npm --name myapp -- start
+            pm2 restart all || pm2 start npm --name app -- start
           EOF
