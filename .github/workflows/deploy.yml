@@ -31,35 +31,18 @@ jobs:
 
       - name: Deploy to Droplet
         run: |
-          # Added Keep-Alive flags to prevent Broken Pipe
-          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=120 root@${{ secrets.DROPLET_IP }} << 'EOF'
-            set -e
-            
-            # Navigate to folder
-            cd ~/Food-price-Cambodia-dashboard
-             
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            node -v
-            npm -v
-            
-            # Git operations
+          ssh root@*** << 'EOF'
+            cd /Food-price-Cambodia-dashboard
             git reset --hard
             git clean -fd
             git fetch origin main
-            git reset --hard origin/main
-            
-            
-            # Install PM2 globally (optional if already installed, but safe to keep)
+            git reset --hard origin/main            
             npm install -g pm2
-            
-            # Build the app
-            # Removed 'nohup' and logs redirection so GitHub stays connected
-            echo "Starting build in background..."
-            nohup npm run build > build.log 2>&1
-            
-            # Restart App
-            echo "Restarting PM2..."
-            pm2 restart myapp || pm2 start npm --name myapp -- start
+            npm run build || true
+            pm2 stop myapp
+            pm2 restart myapp
+            pm2 start npm --name myapp -- start
             pm2 save
+            pm2 statup
+
           EOF
