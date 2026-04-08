@@ -1,45 +1,37 @@
-name: Deploy to DigitalOcean (root)
+name: Deploy Backend
 
 on:
   push:
     branches:
-      - main
+      - main   # change if using another branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Deploy to Droplet via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /var/www/Food-price-Cambodia-dashboard
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          # Check if the secret is actually loading
-          if [ -z "${{ secrets.DROPLET_IP }}" ]; then
-            echo "Error: DROPLET_IP secret is empty"
-            exit 1
-          fi
-          
-          echo "${{ secrets.SSH }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts
-          ssh-keyscan -v -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
-          
+            echo "Pull latest code"
+            git pull origin main
 
-      - name: Deploy to Droplet
-        run: |
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 root@${{ secrets.DROPLET_IP }} << 'EOF'   
-           set -e
-            cd ~/Food-price-Cambodia-dashboard
-            git reset --hard
-            git clean -fd
-            git fetch origin main
-            git reset --hard origin/main            
+            echo "Install dependencies"
+            npm install
+
+            echo "Build project"
+            npm run build
+
             npm install -g pm2
-            npm run build || true
-            pm2 restart myapp
-            pm2 save
 
-          EOF
+            echo "Restart PM2"
+            pm2 restart myapp || pm2 start npm --name myapp -- start
+
+            echo "Save PM2"
+            pm2 save
