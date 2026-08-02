@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 let connectionPromise: Promise<typeof mongoose> | null = null;
 
 async function getDb() {
-  const URI = process.env.URI;
+  const URI = process.env.MONGO_DB_URI;
   const DB_NAME = process.env.DB_NAME;
 
   if (!URI || !DB_NAME) {
